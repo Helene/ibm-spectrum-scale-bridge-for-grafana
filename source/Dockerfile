@@ -25,6 +25,10 @@ ARG HTTPPORT=4242
 ENV PORT=$HTTPPORT
 RUN echo "the HTTP/S port is set to $PORT" 
 
+ARG PERFMONPORT=9981
+ENV SERVERPORT=$PERFMONPORT
+RUN echo "the PERFMONPORT port is set to $SERVERPORT" 
+
 ARG CERTPATH=None
 ENV TLSKEYPATH=$CERTPATH
 
@@ -62,7 +66,7 @@ RUN echo "pmcollector_server: $SERVER" >> $LOGPATH
 RUN echo "ssl certificates location: $TLSKEYPATH" >> $LOGPATH
 RUN echo "HTTP/S port: $PORT" >> $LOGPATH
 
-CMD ["sh", "-c", "python3 zimonGrafanaIntf.py -c 10 -s $SERVER -p $PORT -t $TLSKEYPATH --tlsKeyFile $TLSKEYFILE --tlsCertFile $TLSCERTFILE --apiKeyName $APIKEYNAME --apiKeyValue $APIKEYVALUE"]
+CMD ["sh", "-c", "python3 zimonGrafanaIntf.py -c 10 -s $SERVER -p $PORT -P $SERVERPORT -t $TLSKEYPATH --tlsKeyFile $TLSKEYFILE --tlsCertFile $TLSCERTFILE --apiKeyName $APIKEYNAME --apiKeyValue $APIKEYVALUE"]
 
 EXPOSE 4242 8443
 
