@@ -176,7 +176,7 @@ def parse_cmd_args(argv):
     parser.add_argument('-t', '--tlsKeyPath', action="store", default=None, help='Directory path of tls privkey.pem and cert.pem file location (Required only for HTTPS port 8443)')
     parser.add_argument('-k', '--tlsKeyFile', action="store", default=None, help='Name of TLS key file, f.e.: privkey.pem (Required only for HTTPS port 8443)')
     parser.add_argument('-m', '--tlsCertFile', action="store", default=None, help='Name of TLS certificate file, f.e.: cert.pem (Required only for HTTPS port 8443)')
-    parser.add_argument('-n', '--apiKeyName',  action="store", default=None, help='Name of api key file (Default from config.ini: \'grafana_bridge\')')
+    parser.add_argument('-n', '--apiKeyName',  action="store", default=None, help='Name of api key file (Default from config.ini: \'scale_grafana\')')
     parser.add_argument('-v', '--apiKeyValue',  action=Password, nargs='?', dest='apiKeyValue', default=None, help='Enter your apiKey value:')
 
     args = parser.parse_args(argv)
