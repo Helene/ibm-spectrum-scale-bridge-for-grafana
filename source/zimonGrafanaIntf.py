@@ -27,6 +27,8 @@ import logging.handlers
 import sys
 import os
 import errno
+import time
+
 
 from queryHandler.Query import Query
 from queryHandler.QueryHandler import PerfmonConnError, QueryHandler2 as QueryHandler
@@ -43,7 +45,7 @@ from time import sleep
 
 class MetadataHandler():
 
-    def __init__(self, logger, server, port, apiKeyName, apiKeyValue, includeDiskData=False):
+    def __init__(self, logger, server, port, apiKeyName, apiKeyValue, includeDiskData=False, stats_metrics=None):
         self.__qh = None
         self.__sensorsConf = None
         self.__metaData = None
@@ -53,6 +55,7 @@ class MetadataHandler():
         self.apiKeyName = apiKeyName
         self.apiKeyValue = apiKeyValue
         self.includeDiskData = includeDiskData
+        self.stats_metrics = stats_metrics
 
         self.__initializeTables()
 
@@ -215,6 +218,18 @@ class GetHandler(object):
         elif 'update' in cherrypy.request.script_name:
             resp = self.md.update()
 
+        # /api/stats
+            '''resp = [{"metric": "test1","timestamp": 1369350222,"value": "1"},
+                       {"metric": "test2","timestamp": 1369350222,"value": "0"},
+                       {"metric": "test3","timestamp": 1369350222,"value": "5"}]'''
+        elif 'stats' in cherrypy.request.script_name:
+            self.logger.info("we have request obj")
+            cherrypy.request.json = StatsRequestObj(self.md.stats_metrics).__dict__
+            ph = PostHandler(self.logger, self.md)
+            resp = ph.POST()
+            self.logger.info("we have response obj")
+            #self.logger.info(str(resp))
+
         elif 'aggregators' in cherrypy.request.script_name:
             resp = ["noop", "sum", "avg", "max", "min", "rate"]
 
@@ -278,6 +293,9 @@ class PostHandler(object):
         if res is None:
             return
         self.logger.details("res.rows length: {}".format(len(res.rows)))
+        self.logger.info("rows")
+        self.logger.info(f'{res.rows}')
+        self.logger.info(f'{res.columnInfos}')
         rows = res.rows
         if dsOp and dsInterval and len(res.rows) > 1:
             rows = res.downsampleResults(dsInterval, dsOp)
@@ -382,10 +400,25 @@ class PostHandler(object):
                 raise cherrypy.HTTPError(500, MSG[500])
 
             filtersMap = self.TOPO.getAllFilterMapsForMetric(columnInfo.keys[0].metric)
-            res = QueryResultObj(inputQuery, dps, showQuery, globalAnnotations)
-            res.parseTags(self.logger, filtersMap, columnInfo)
-            cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
-            resList.append(res.__dict__)
+            (tags, aggrTags) = parseTags(self.logger, filtersMap, columnInfo)
+            if 'stats' in cherrypy.request.script_name:
+                self.logger.info('columnInfo')
+                self.logger.info(str(columnInfo))
+                self.logger.info('dps')
+                self.logger.info(str(dps))
+                #(tags, aggrTags) = parseTags(self.logger, filtersMap, columnInfo)
+                for _key, _value in dps.items():
+                    self.logger.info(f'build StatsResultObj: _key:{_key}, _value:{_value}, tags:{tags}')
+                    res = StatsResultObj(inputQuery, _key, _value, tags)
+                    resList.append(res.__dict__)
+                self.logger.info(str(resList))
+            else:  
+                res = QueryResultObj(inputQuery, dps, showQuery, globalAnnotations)
+                #res.parseTags(self.logger, filtersMap, columnInfo)
+                res.tags = tags
+                res.aggregatedTags = aggrTags
+                cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+                resList.append(res.__dict__)
 
         return resList
 
@@ -441,6 +474,16 @@ class PostHandler(object):
         compatability between versions of grafana < 3 and version 3.'''
 
         # read query request parameters
+        #if 'stats' in cherrypy.request.script_name:
+        #    #ts = calendar.timegm(time.gmtime()) - 15
+        #    #ts = int(round(time.time() * 1000))
+        #    ts=int(timer()*1000)
+        #    ts1 = ts-1000
+        #    self.logger.info("ts:{0}, ts1:{1}".format(str(ts),str(ts1)))
+        #    stats_query["start"] = ts1
+        #    jreq = stats_query
+        #    self.logger.info("running stats query %s", str(stats_query))
+        #else:
         jreq = cherrypy.request.json
 
         _resp = []
@@ -468,8 +511,11 @@ class PostHandler(object):
                 else:
                     continue
 
-            res = self._formatQueryResponse(q, columnValues, jreq.get('showQuery'), jreq.get('globalAnnotations'))
-            cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+            if 'stats' in cherrypy.request.script_name:
+                res = self._formatQueryResponse(q, columnValues, jreq.get('showQuery'), jreq.get('globalAnnotations'))
+            else:
+                res = self._formatQueryResponse(q, columnValues, jreq.get('showQuery'), jreq.get('globalAnnotations'))
+                cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
             _resp.extend(res)
 
         return _resp
@@ -541,6 +587,78 @@ class QueryResultObj():
                 self.tags[_key] = _values[0]
 
 
+class StatsResultObj():
+
+    def __init__(self, inputQuery, timestamp, value, tags):
+        self.metric = inputQuery.get('metric')
+        self.timestamp = timestamp*1000
+        self.value = value if value is not None else 0
+        self.tags = tags
+
+
+class StatsRequestObj():
+
+    def __init__(self, metrics, start=None, end=None):
+        self.queries = []
+        self.msResolution = False
+        self.globalAnnotations = True
+        self.showQuery = True
+        self.start = start or int(time.time()*1000) - 2000
+        self.end = end or int(time.time()*1000) - 1000
+        self.__initializeQueries(metrics)
+
+    def __initializeQueries(self, metrics):
+        '''Parse metrics to the queries property'''
+        if not metrics:
+            #logger.error("Stats metrics to export not found")
+            return
+        for metric in metrics.split(','):
+            self.queries.append({"metric":metric, "aggregator":"noop"})
+
+
+def parseTags(logger, filtersMap, columnInfo):
+    tagsDict = defaultdict(list)
+    aggregatedTags = []
+    tags = defaultdict(list)
+        
+    for key in columnInfo.keys:
+        ident = [key.parent]
+        ident.extend(key.identifier)
+        logger.debug(MSG['ReceivAttrValues'].format('Single ts identifiers', ', '.join(ident)))
+        for filtersDict in filtersMap:
+            if all((value in filtersDict.values()) for value in ident):
+                logger.debug(MSG['ReceivAttrValues'].format('filtersKeys',', '.join(filtersDict.keys())))
+                if len(columnInfo.keys) == 1:
+                    tags = filtersDict
+                else:
+                    for _key, _value in filtersDict.items():
+                        tagsDict[_key].append(_value)
+
+    for _key, _values in tagsDict.items():
+        if len(set(_values)) > 1:
+            aggregatedTags.append(_key)
+        else:
+            tags[_key] = _values[0]
+    return(tags, aggregatedTags)
+
+
+#def stats_query(logger, filtersMap, columnInfo):
+#    ts=int(timer()*1000)
+#    ts1 = ts-1000
+#    self.logger.info("ts:{0}, ts1:{1}".format(str(ts),str(ts1)))
+#    stats_query = {"queries":
+#                [{"metric":"cpu_system","aggregator":"noop"},{"metric":"tct_fset_total_persisted_time","aggregator":"noop"}],"msResolution":False,"globalAnnotations":True,"showQuery":True}
+#    for metric in self.md.stat_metrics:
+#        d["metric"]= metric
+#        d["aggregator"] ="noop"
+#        queries.append(d)
+#
+#
+#    stats_query["start"] = ts1
+#    jreq = stats_query
+#    self.logger.info("running stats query %s", str(stats_query))
+
+
 def processFormJSON(entity):
     ''' Used to generate JSON when the content
     is of type application/x-www-form-urlencoded. Added for grafana 3 support'''
@@ -610,7 +728,9 @@ def main(argv):
         logger.info("%s", MSG['BridgeVersionInfo'].format(__version__))
         logger.details('zimonGrafanaItf invoked with parameters:\n %s', "\n".join("{}={}".format(k, v) for k, v in args.items() if not k == 'apiKeyValue'))
         # logger.details('zimonGrafanaItf invoked with parameters:\n %s', "\n".join("{}={}".format(k, type(v)) for k, v in args.items()))
-        mdHandler = MetadataHandler(logger, args.get('server'), args.get('serverPort'), args.get('apiKeyName'), resolveAPIKeyValue(args.get('apiKeyValue')), args.get('includeDiskData'))
+
+        mdHandler = MetadataHandler(logger, args.get('server'), args.get('serverPort'), args.get('apiKeyName'), resolveAPIKeyValue(args.get('apiKeyValue')), args.get('includeDiskData'), args.get('stats_metrics', None))
+
     except (AttributeError, TypeError, ValueError) as e:
         logger.details('%s', MSG['IntError'].format(str(e)))
         logger.error(MSG['MetaError'])
@@ -668,6 +788,13 @@ def main(argv):
 
     # query for list of filters (openTSDB)
     cherrypy.tree.mount(gh, '/api/config/filters',
+                        {'/':
+                         {'request.dispatch': cherrypy.dispatch.MethodDispatcher()}
+                         }
+                        )
+
+    # query for stats (openTSDB)
+    cherrypy.tree.mount(gh, '/api/stats',
                         {'/':
                          {'request.dispatch': cherrypy.dispatch.MethodDispatcher()}
                          }
