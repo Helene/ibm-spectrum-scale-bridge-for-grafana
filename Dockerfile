@@ -1,14 +1,14 @@
 ARG BUILD_ENV=prod
-ARG BASE=registry.access.redhat.com/ubi9/ubi:9.6-1752625787
+ARG BASE=registry.access.redhat.com/ubi10/ubi:10.0-1754586730
 
 FROM $BASE AS build_prod
-ONBUILD COPY ./requirements/requirements_ubi9.txt  /root/requirements_ubi9.txt
+ONBUILD COPY ./requirements/requirements_ubi10.txt /root/requirements_ubi10.txt
 
 FROM $BASE AS build_test
-ONBUILD COPY ./requirements/requirements_ubi.in  /root/requirements_ubi.in
+ONBUILD COPY ./requirements/requirements_ubi.in /root/requirements_ubi.in
 
 FROM $BASE AS build_custom
-ONBUILD COPY ./requirements/requirements.in  /root/requirements.in
+ONBUILD COPY ./requirements/requirements.in /root/requirements.in
 
 FROM build_${BUILD_ENV}
 
@@ -95,12 +95,12 @@ RUN echo "the HTTP/S protocol is set to $PROTOCOL"  && \
     echo "the log will use $LOGPATH" 
 
 RUN if [ $(expr "$BASE" : '.*python.*') -eq 0 ]; then \
-    yum install -y python39 python3-pip; \
+    yum install -y python3.12 python3.12-pip; \
     if [ "$BUILD_ENV" = "test" ]; then \
     python3 -m pip install pip-tools && \
-    python3 -m piptools compile /root/requirements_ubi.in  --output-file /root/requirements_ubi9.txt && \
-    echo "Compiled python packages: $(cat /root/requirements_ubi9.txt)"; fi && \
-    python3 -m pip install -r /root/requirements_ubi9.txt && \
+    python3 -m piptools compile /root/requirements_ubi.in  --output-file /root/requirements_ubi10.txt && \
+    echo "Compiled python packages: $(cat /root/requirements_ubi10.txt)"; fi && \
+    python3 -m pip install -r /root/requirements_ubi10.txt && \
     echo "Installed python version: $(python3 -V)" && \
     echo "Installed python packages: $(python3 -m pip list)"; else \
     echo "Already using python container as base image. No need to install it." && \ 
