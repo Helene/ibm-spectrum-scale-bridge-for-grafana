@@ -20,6 +20,8 @@ Created on Mai 15, 2026
 @author: HWASSMAN
 '''
 
+import sys
+import os
 from importlib.metadata import distributions
 
 pkgs = []
@@ -46,5 +48,8 @@ for d in distributions():
 
 result = sorted(list(set(pkgs)), key=str.lower)
 
-with open('/licenses/packages_licenses.tsv', 'w') as f:
+output_path = sys.argv[1] if len(sys.argv) > 1 else '/licenses/packages_licenses.tsv'
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+with open(output_path, 'w') as f:
     f.write('\n'.join(result) + '\n')
