@@ -144,9 +144,9 @@ def merge_defaults_and_args(defaults, args):
     args = vars(args)
     brConfig.update({k: v for k, v in args.items() if v is not None and not (v == str(None))})
     for k, v in brConfig.items():
-        if v == "no" or v == "False":
+        if isinstance(v, str) and v.lower() in ("no", "false"):
             brConfig[k] = False
-        elif v == "yes" or v == "True":
+        elif isinstance(v, str) and v.lower() in ("yes", "true"):
             brConfig[k] = True
         elif isinstance(v, str) and v.isdigit():
             brConfig[k] = int(v)
@@ -180,6 +180,10 @@ class ConfigManager(object, metaclass=Singleton):
                     for name, value in config.items(sect):
                         if value.isdigit():
                             value = int(value)
+                        elif value.lower() in ("true", "yes"):
+                            value = True
+                        elif value.lower() in ("false", "no"):
+                            value = False
                         options[sect][name] = value
             except Exception as e:
                 print(f"Error: Cannot read config file {fileName} Exception {e}")

@@ -107,7 +107,7 @@ def test_case11():
     cm = ConfigManager()
     result = cm.defaults
     assert 'includeDiskData' in result.keys()
-    assert result['includeDiskData'] == 'no'
+    assert result['includeDiskData'] is False
 
 
 def test_case12():
@@ -121,3 +121,55 @@ def test_case13():
     result = cm.defaults
     assert 'protocol' in result.keys()
     assert result['protocol'] == 'http'
+
+
+def lowercase_bool_setup():
+    global tmp_ini
+    import tempfile
+    content = (
+        "[basic_auth]\n"
+        "enabled = true\n"
+        "[prometheues_exporter_plugin]\n"
+        "rawCounters = false\n"
+        "[query]\n"
+        "includeDiskData = yes\n"
+        "[server]\n"
+        "caCertPath = false\n"
+    )
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.ini', delete=False) as f:
+        f.write(content)
+        tmp_ini = f.name
+
+
+@with_setup(lowercase_bool_setup)
+def test_case14():
+    '''readConfigFile converts lowercase "true" to bool True'''
+    cm = ConfigManager()
+    try:
+        result = cm.readConfigFile(tmp_ini)
+        assert result['basic_auth']['enabled'] is True
+    finally:
+        os.unlink(tmp_ini)
+
+
+@with_setup(lowercase_bool_setup)
+def test_case15():
+    '''readConfigFile converts lowercase "false" to bool False'''
+    cm = ConfigManager()
+    try:
+        result = cm.readConfigFile(tmp_ini)
+        assert result['prometheues_exporter_plugin']['rawCounters'] is False
+        assert result['server']['caCertPath'] is False
+    finally:
+        os.unlink(tmp_ini)
+
+
+@with_setup(lowercase_bool_setup)
+def test_case16():
+    '''readConfigFile converts "yes" to bool True'''
+    cm = ConfigManager()
+    try:
+        result = cm.readConfigFile(tmp_ini)
+        assert result['query']['includeDiskData'] is True
+    finally:
+        os.unlink(tmp_ini)
