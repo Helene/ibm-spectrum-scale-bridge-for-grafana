@@ -9,10 +9,22 @@ from nose2.tools.decorators import with_setup
 
 
 def my_setup():
-    global a, b, c, d, e, f, g, m, n, o, p, y, r, s, w, v
+    global a, b, c, d, e, f, g, m, n, o, p, y, r, s, w, v, lc_true, lc_false
     a = ConfigManager().defaults
     y = ConfigManager().defaults.copy()
     y['apiKeyValue'] = '/tmp/mykey'
+
+    # use'true'/'false' in config.ini instead of 'True'/'False')
+    lc_true = ConfigManager().defaults.copy()
+    lc_true['enabled'] = 'true'
+    lc_true['rawCounters'] = 'true'
+    lc_true['caCertPath'] = 'false'
+    lc_true['includeDiskData'] = 'yes'
+
+    lc_false = ConfigManager().defaults.copy()
+    lc_false['enabled'] = 'false'
+    lc_false['rawCounters'] = 'false'
+    lc_false['includeDiskData'] = 'no'
 
     b, c = parse_cmd_args([])
     d, e = parse_cmd_args(['-p', '8443', '-t', '/etc/my_tls'])
@@ -245,3 +257,34 @@ def test_case19():
     assert not valid1
     assert msg == 'Missing mandatory ApiKey settings, quitting'
     assert msg1 == 'Missing mandatory ApiKey settings, quitting'
+
+
+@with_setup(my_setup)
+def test_case20():
+    '''lowercase "true" in defaults is converted to bool True by merge_defaults_and_args'''
+    result = merge_defaults_and_args(lc_true, b)
+    assert result.get('enabled') is True
+    assert result.get('rawCounters') is True
+
+
+@with_setup(my_setup)
+def test_case21():
+    '''lowercase "false"/"no" in defaults is converted to bool False by merge_defaults_and_args'''
+    result = merge_defaults_and_args(lc_false, b)
+    assert result.get('enabled') is False
+    assert result.get('rawCounters') is False
+    assert result.get('includeDiskData') is False
+
+
+@with_setup(my_setup)
+def test_case22():
+    '''lowercase "false" for caCertPath in defaults is converted to bool False'''
+    result = merge_defaults_and_args(lc_true, b)
+    assert result.get('caCertPath') is False
+
+
+@with_setup(my_setup)
+def test_case23():
+    '''lowercase "yes" for includeDiskData in defaults is converted to bool True'''
+    result = merge_defaults_and_args(lc_true, b)
+    assert result.get('includeDiskData') is True
