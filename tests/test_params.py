@@ -288,5 +288,3 @@ def test_case23():
     '''lowercase "yes" for includeDiskData in defaults is converted to bool True'''
     result = merge_defaults_and_args(lc_true, b)
     assert result.get('includeDiskData') is True
-
-
