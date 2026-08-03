@@ -42,6 +42,7 @@ ONBUILD RUN LICENSES_DIR=/licenses && \
             python${PY_VER} -m piptools compile /root/requirements_ubi.in  --output-file /root/requirements_ubi10.txt && \
             echo "Compiled python packages: $(cat /root/requirements_ubi10.txt)" && \
             python${PY_VER} -m pip install --no-cache-dir --ignore-installed -r /root/requirements_ubi10.txt && \
+            python${PY_VER} -m pip uninstall -y $(python${PY_VER} -m pip show pip-tools | grep -i "^requires:" | sed 's/Requires: //I;s/,//g') pip-tools && \
             dnf remove -y python${PY_VER}-pip && dnf clean all -y && \
             rm -rf /usr/lib/python${PY_VER}/site-packages/pip* && \
             rm -rf /usr/local/lib/python${PY_VER}/site-packages/cherrypy/test && \
