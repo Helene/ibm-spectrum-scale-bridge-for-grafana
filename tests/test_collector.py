@@ -2,7 +2,6 @@ import logging
 import os
 import json
 from unittest import mock
-from packaging.version import Version
 from nose2.tools.such import helper as assert_helper
 from nose2.tools.decorators import with_setup
 from source.bridgeLogger import configureLogging
@@ -10,8 +9,14 @@ from source.queryHandler.Topo import Topo
 from source.collector import QueryPolicy, SensorCollector
 from source.__version__ import __version__ as version
 
-_v = Version(version)
-_old_query_frmat = _v < Version("8.1.4") or Version("9.0.0") <= _v < Version("9.0.3")
+
+def _parse_version(v):
+    """Return a comparable tuple of ints, ignoring any pre/dev suffix."""
+    return tuple(int(x) for x in v.split('+')[0].split('-')[0].split('.'))
+
+
+_v = _parse_version(version)
+_old_query_frmat = _v < (8, 1, 4) or (9, 0, 0) <= _v < (9, 0, 3)
 
 
 def my_setup():
