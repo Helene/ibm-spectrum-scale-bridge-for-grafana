@@ -222,13 +222,16 @@ def test_case18():
 def test_case19():
     """When /etc/grafanabridge/config.ini does not exist, ConfigManager()
     returns template-only defaults without printing an error."""
-    import unittest.mock as mock
     cm = ConfigManager.__new__(ConfigManager)
     cm._ConfigManager__defaults = {}
     cm.customFile = None
     cm.templateFile = cm.get_template_path()
-    with mock.patch('os.path.isfile', return_value=False):
+    # Point DEFAULT_CUSTOM_CONFIG at a path that is guaranteed not to exist
+    cm.__class__.DEFAULT_CUSTOM_CONFIG = '/tmp/__nonexistent_grafanabridge_test__.ini'
+    try:
         result = cm.parse_defaults()
+    finally:
+        cm.__class__.DEFAULT_CUSTOM_CONFIG = '/etc/grafanabridge/config.ini'
     # Template defaults returned; no key from a non-existent override file
     assert isinstance(result, dict)
     assert len(result) > 0
