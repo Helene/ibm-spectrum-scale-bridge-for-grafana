@@ -173,3 +173,84 @@ def test_case16():
         assert result['query']['includeDiskData'] is True
     finally:
         os.unlink(tmp_ini)
+
+
+def test_case17():
+    """A custom file containing only [server] overrides server keys;
+    all other defaults come from the template."""
+    import tempfile
+    content = "[server]\nserver = testhost.example.com\n"
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.ini', delete=False) as f:
+        f.write(content)
+        tmp = f.name
+    try:
+        cm = ConfigManager.__new__(ConfigManager)
+        cm._ConfigManager__defaults = {}
+        cm.customFile = tmp
+        cm.templateFile = cm.get_template_path()
+        result = cm.parse_defaults()
+        # Override applied
+        assert result['server'] == 'testhost.example.com'
+        # Unrelated template default still present
+        assert result['serverPort'] == 9980
+    finally:
+        os.unlink(tmp)
+
+
+def test_case18():
+    """Section-intersection guard is gone: a custom file with a locally-added
+    section (not in template) must not cause the file to be silently dropped."""
+    import tempfile
+    content = "[local_extension]\ncustomKey = customValue\n"
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.ini', delete=False) as f:
+        f.write(content)
+        tmp = f.name
+    try:
+        cm = ConfigManager.__new__(ConfigManager)
+        cm._ConfigManager__defaults = {}
+        cm.customFile = tmp
+        cm.templateFile = cm.get_template_path()
+        result = cm.parse_defaults()
+        # Local key present
+        assert result.get('customKey') == 'customValue'
+        # Template defaults also present (file was not silently dropped)
+        assert result['serverPort'] == 9980
+    finally:
+        os.unlink(tmp)
+
+
+def test_case19():
+    """When /etc/grafanabridge/config.ini does not exist, ConfigManager()
+    returns template-only defaults without printing an error."""
+    cm = ConfigManager.__new__(ConfigManager)
+    cm._ConfigManager__defaults = {}
+    cm.customFile = None
+    cm.templateFile = cm.get_template_path()
+    # Point DEFAULT_CUSTOM_CONFIG at a path that is guaranteed not to exist
+    cm.__class__.DEFAULT_CUSTOM_CONFIG = '/tmp/__nonexistent_grafanabridge_test__.ini'
+    try:
+        result = cm.parse_defaults()
+    finally:
+        cm.__class__.DEFAULT_CUSTOM_CONFIG = '/etc/grafanabridge/config.ini'
+    # Template defaults returned; no key from a non-existent override file
+    assert isinstance(result, dict)
+    assert len(result) > 0
+
+
+def test_case20():
+    """An explicit customFile argument is used as-is; DEFAULT_CUSTOM_CONFIG
+    is never consulted even if /etc/grafanabridge/config.ini exists."""
+    import tempfile
+    content = "[server]\nserver = explicit-host\n"
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.ini', delete=False) as f:
+        f.write(content)
+        tmp = f.name
+    try:
+        cm = ConfigManager.__new__(ConfigManager)
+        cm._ConfigManager__defaults = {}
+        cm.customFile = tmp    # explicit — DEFAULT_CUSTOM_CONFIG not reached
+        cm.templateFile = cm.get_template_path()
+        result = cm.parse_defaults()
+        assert result['server'] == 'explicit-host'
+    finally:
+        os.unlink(tmp)

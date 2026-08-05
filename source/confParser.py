@@ -156,6 +156,11 @@ def merge_defaults_and_args(defaults, args):
 class ConfigManager(object, metaclass=Singleton):
     ''' A singleton class managing the application configuration defaults '''
 
+    # Well-known path for the customer override file on bare-metal RPM installs.
+    # Used as a fallback in parse_defaults() when no --configFile argument was
+    # supplied AND the file actually exists on disk.
+    DEFAULT_CUSTOM_CONFIG = "/etc/grafanabridge/config.ini"
+
     def __init__(self, custom_config_file=None):
         self.__defaults = {}
         self.customFile = custom_config_file
@@ -215,15 +220,18 @@ class ConfigManager(object, metaclass=Singleton):
         file (.config.ini)
         """
 
-        default_sections, defaults = self.parse_file(self.templateFile)
-        if not self.customFile or self.customFile == self.templateFile:
+        _, defaults = self.parse_file(self.templateFile)
+
+        # Determine the effective custom file
+        effective_custom = self.customFile or (
+            self.DEFAULT_CUSTOM_CONFIG
+            if os.path.isfile(self.DEFAULT_CUSTOM_CONFIG)
+            else None
+        )
+        if not effective_custom or effective_custom == self.templateFile:
             return defaults
 
-        custom_sections, customs = self.parse_file(self.customFile)
-        sect = default_sections.intersection(custom_sections)
-        if not sect:
-            return defaults
-
+        _, customs = self.parse_file(effective_custom)
         defaults.update(customs)
         return defaults
 
