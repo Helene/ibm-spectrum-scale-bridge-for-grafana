@@ -15,15 +15,12 @@
 # limitations under the License.
 ##############################################################################
 
-Created on Apr 4, 2017
+Created on Aug 1ß, 2026
 
 @author: HWASSMAN
 '''
 
-from collections import OrderedDict, defaultdict
-from copy import copy
-import re
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set
 
 
 class Schema:
@@ -179,7 +176,7 @@ class Schema:
         Return Sensor name for a given metric name or None if it was not found
         """
         if searchMetric.find("(") >= 0:
-            searchMetric = searchMetric[searchMetric.find("(") + 1 : -1]
+            searchMetric = searchMetric[searchMetric.find("(") + 1: -1]
 
         result = next((sensor for sensor, metrics in self.schema[Schema.METRICS].items() if searchMetric in metrics), None)
         if result is None:
