@@ -24,6 +24,7 @@ import cherrypy
 
 from queryHandler.QueryHandler import QueryHandler2 as QueryHandler
 from queryHandler.Topo import Topo
+from queryHandler.Schema import Schema
 from queryHandler import SensorConfig
 from utils import execution_time, synchronized
 from messages import ERR, MSG
@@ -141,15 +142,21 @@ class MetadataHandler(metaclass=Singleton):
             raise ValueError(MSG['NoSensorConfigData'])
         MAX_ATTEMPTS_COUNT = 3
         for attempt in range(1, MAX_ATTEMPTS_COUNT + 1):
-            topoStr = self.qh.getTopology()
-            if not topoStr:
+            schemaData = self.qh.getSchema()
+            if schemaData:
+                self.__metaData = Schema(schemaData, self.logger)
+            else:
+                self.logger.warning(MSG['SchemaNotAvailable'])
+                topoStr = self.qh.getTopology()
+                if topoStr:
+                    self.__metaData = Topo(topoStr)
+            if not self.__metaData:
                 if attempt > MAX_ATTEMPTS_COUNT:
                     break
                 # if no data returned because of the REST HTTP server is still starting, sleep and retry (max 3 times)
                 self.logger.warning(MSG['NoDataStartNextAttempt'].format(attempt, MAX_ATTEMPTS_COUNT))
                 sleep(self.sleepTime)
             else:
-                self.__metaData = Topo(topoStr)
                 self.__updateTime = time()
                 foundItems = len(self.metaData.allParents) - 1
                 sensors = self.metaData.sensorsSpec.keys()
@@ -219,11 +226,16 @@ class MetadataHandler(metaclass=Singleton):
         if refresh_all:
             self.__sensorsConf = SensorConfig.readSensorsConfigFromMMSDRFS(self.logger)
 
-        topoStr = self.qh.getTopology()
-        if not topoStr:
-            self.logger.error(MSG['NoData'])  # Please check the pmcollector is properly configured and running.
-            raise cherrypy.HTTPError(404, ERR[404])
-        self.__metaData = Topo(topoStr)
+        schemaData = self.qh.getSchema()
+        if schemaData:
+            self.__metaData = Schema(schemaData, self.logger)
+        else:
+            self.logger.warning(MSG['SchemaNotAvailable'])
+            topoStr = self.qh.getTopology()
+            if not topoStr:
+                self.logger.error(MSG['NoData'])  # Please check the pmcollector is properly configured and running.
+                raise cherrypy.HTTPError(404, ERR[404])
+            self.__metaData = Topo(topoStr)
         self.__updateTime = time()
         self.logger.details(MSG['MetaSuccess'])
         self.logger.debug(MSG['ReceivAttrValues'].format('parents', ", ".join(self.metaData.allParents)))
