@@ -193,6 +193,12 @@ class Schema:
             return labelsList
         return []
 
+    def getSensorMetricNames(self, searchSensor: str) -> list:
+        metrics = self.metrics.get(searchSensor, None)
+        if metrics:
+            return metrics.keys()
+        return []
+
     def getSensorMetricTypes(self, searchSensor: str) -> Dict[str, str]:
         sensorMetricsTypes = {}
         metrics = self.metrics.get(searchSensor, None)
