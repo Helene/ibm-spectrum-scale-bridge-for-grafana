@@ -1,3 +1,39 @@
+# Version 9.1.1 (08/12/2026)
+
+Added support for the new api endpoint schema introduced by the IBM Performance Monitoring tool, which returns a significantly smaller dataset of zimon metadata \
+Added a new container image build argument, py_ver, to control which Python version is installed inside the image for each of the three supported build environments \
+Switched to the new split model, which allows specifying only the sections in the custom config.ini file that do not exist in the shipped config.ini template \
+Modified ConfParser to support case-insensitive booleans in config.ini
+
+Tested with OpenTSDB version 2.4
+Tested with Grafana version 12.0.2
+Tested with RedHat community-powered Grafana operator v.5
+
+
+
+# Version 8.1.4 (08/03/2026)
+Added support for --suppress-null values by perfmon query rawData format, allowing skipping of data rows with no data \
+Added script to check open-source package licenses during image build \
+Updated the Dockerfile parent image to registry.access.redhat.com/ubi9/ubi:9.8-1785388874 \
+
+Tested with OpenTSDB version 2.4
+Tested with Grafana version 12.0.2
+Tested with RedHat community-powered Grafana operator v.5
+
+
+
+# Version 8.1.3 (07/01/2026)
+Added a new container image build argument, py_ver, to control which Python version is installed inside the image for each of the three supported build environments \
+Raised the minimum supported Python version to 3.11 \
+Set the default Python version to 3.12 \
+Updated the Dockerfile parent image to registry.access.redhat.com/ubi9/ubi:9.8-1782365825 \
+
+Tested with OpenTSDB version 2.4
+Tested with Grafana version 12.0.0
+Tested with RedHat community-powered Grafana operator v.5
+
+
+
 # Version 9.1.0 (06/06/2026)
 
 Added support for --suppress-null values by perfmon query rawData format, allowing skipping of data rows with no data

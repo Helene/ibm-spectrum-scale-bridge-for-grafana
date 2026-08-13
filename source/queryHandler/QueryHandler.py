@@ -459,6 +459,19 @@ class QueryHandler2:
             self.logger.error(
                 'QueryHandler: getTopology response not valid json: {0} {1}'.format(res[:20], e))
 
+    def getSchema(self):
+        # Possible extension: Table and sensor filter could be given as query params
+        params = {'query': '--no-details'}
+        res = self.__do_RESTCall('perfmon/schema', "GET", params)
+        if res is None:
+            self.logger.error("QueryHandler: getSchema returns no data.")
+            return
+        try:
+            result = json.loads(res, strict=False)
+            return result
+        except Exception as e:
+            self.logger.error(f"QueryHandler: getSchema response not valid json: {res[:20]} {e}")  # noqa: TRY400
+
     def getAvailableMetrics(self):
         '''
         Returns output from topo -m

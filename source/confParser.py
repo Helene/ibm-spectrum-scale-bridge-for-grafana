@@ -144,9 +144,9 @@ def merge_defaults_and_args(defaults, args):
     args = vars(args)
     brConfig.update({k: v for k, v in args.items() if v is not None and not (v == str(None))})
     for k, v in brConfig.items():
-        if v == "no" or v == "False":
+        if isinstance(v, str) and v.lower() in ("no", "false"):
             brConfig[k] = False
-        elif v == "yes" or v == "True":
+        elif isinstance(v, str) and v.lower() in ("yes", "true"):
             brConfig[k] = True
         elif isinstance(v, str) and v.isdigit():
             brConfig[k] = int(v)
@@ -155,6 +155,11 @@ def merge_defaults_and_args(defaults, args):
 
 class ConfigManager(object, metaclass=Singleton):
     ''' A singleton class managing the application configuration defaults '''
+
+    # Well-known path for the customer override file on bare-metal RPM installs.
+    # Used as a fallback in parse_defaults() when no --configFile argument was
+    # supplied AND the file actually exists on disk.
+    DEFAULT_CUSTOM_CONFIG = "/etc/grafanabridge/config.ini"
 
     def __init__(self, custom_config_file=None):
         self.__defaults = {}
@@ -180,6 +185,10 @@ class ConfigManager(object, metaclass=Singleton):
                     for name, value in config.items(sect):
                         if value.isdigit():
                             value = int(value)
+                        elif value.lower() in ("true", "yes"):
+                            value = True
+                        elif value.lower() in ("false", "no"):
+                            value = False
                         options[sect][name] = value
             except Exception as e:
                 print(f"Error: Cannot read config file {fileName} Exception {e}")
@@ -211,15 +220,18 @@ class ConfigManager(object, metaclass=Singleton):
         file (.config.ini)
         """
 
-        default_sections, defaults = self.parse_file(self.templateFile)
-        if not self.customFile or self.customFile == self.templateFile:
+        _, defaults = self.parse_file(self.templateFile)
+
+        # Determine the effective custom file
+        effective_custom = self.customFile or (
+            self.DEFAULT_CUSTOM_CONFIG
+            if os.path.isfile(self.DEFAULT_CUSTOM_CONFIG)
+            else None
+        )
+        if not effective_custom or effective_custom == self.templateFile:
             return defaults
 
-        custom_sections, customs = self.parse_file(self.customFile)
-        sect = default_sections.intersection(custom_sections)
-        if not sect:
-            return defaults
-
+        _, customs = self.parse_file(effective_custom)
         defaults.update(customs)
         return defaults
 
