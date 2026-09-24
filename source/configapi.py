@@ -29,6 +29,7 @@ import re
 
 from messages import MSG
 from bridgeLogger import getBridgeLogger
+import confParser
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +208,12 @@ class ConfigApi(object):
     -----------------------
     POST  /config/init        create the custom config file so that subsequent
                               write calls can persist changes across restarts
+
+    Validation endpoint
+    -------------------
+    GET   /config/validate    validate the current live configuration
+    POST  /config/validate    dry-run: validate the live config merged with the
+                              supplied JSON body — nothing is applied or written
     """
 
     exposed = True
@@ -233,6 +240,7 @@ class ConfigApi(object):
                                    self._section_to_keys)
         self.sections = _SectionListApi(logger, self._section_to_keys)
         self.init = _InitApi(logger, config_manager)
+        self.validate = _ValidateApi(logger, self._config)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -631,6 +639,100 @@ class _InitApi(object):
     def OPTIONS(self, **params):
         del cherrypy.response.headers['Allow']
         cherrypy.response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+        cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        cherrypy.response.headers['Access-Control-Max-Age'] = 604800
+
+
+# ---------------------------------------------------------------------------
+# Validation sub-handler
+# ---------------------------------------------------------------------------
+
+def _run_validators(candidate):
+    """Run all startup-time check functions against *candidate* config dict.
+
+    Returns a list of error message strings (empty list means valid).
+    The order matches the check sequence in confParser.getSettings().
+    """
+    errors = []
+    for fn in (
+        confParser.checkApplicationPort,
+        confParser.checkAPIsettings,
+        confParser.checkBasicAuthsettings,
+        confParser.checkTLSsettings,
+        confParser.checkCAsettings,
+    ):
+        ok, msg = fn(candidate)
+        if not ok:
+            errors.append(msg)
+    return errors
+
+
+class _ValidateApi(object):
+    """Handles GET/POST /config/validate.
+
+    GET  /config/validate
+        Validates the current live configuration against the same rules that
+        are checked at bridge startup.  Returns {"valid": true} or
+        {"valid": false, "errors": [...]}.
+
+    POST /config/validate   body: {"key": value, ...}
+        Performs a dry-run: merges the supplied key/value pairs into a copy of
+        the live configuration and validates the result.  Nothing is applied or
+        written to disk.  Returns the same structure as GET, plus a
+        "candidate" field showing the merged values that were checked (secrets
+        omitted).
+    """
+
+    exposed = True
+
+    def __init__(self, logger, config):
+        self.logger = logger
+        self._config = config
+
+    def GET(self, **params):
+        self.logger.trace("GET /config/validate")
+        errors = _run_validators(self._config)
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        if errors:
+            return json.dumps({"valid": False, "errors": errors}).encode('utf-8')
+        return json.dumps({"valid": True}).encode('utf-8')
+
+    def POST(self, **params):
+        """Dry-run validation: merge the request body into a copy of the live
+        config and validate — nothing is applied or persisted."""
+        self.logger.trace("POST /config/validate")
+        raw = cherrypy.request.body.read()
+        if raw:
+            try:
+                body = json.loads(raw.decode('utf-8'))
+            except (ValueError, AttributeError) as exc:
+                raise cherrypy.HTTPError(400, f"Invalid JSON body: {exc}")
+            if not isinstance(body, dict):
+                raise cherrypy.HTTPError(400, "Request body must be a JSON object")
+        else:
+            body = {}
+
+        # Build candidate: start from a copy of the live config, overlay body.
+        candidate = dict(self._config)
+        candidate.update(body)
+
+        errors = _run_validators(candidate)
+
+        # Build a safe view of the candidate (secrets stripped).
+        safe_candidate = {k: v for k, v in candidate.items()
+                          if k not in HIDDEN_KEYS}
+
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        if errors:
+            return json.dumps({"valid": False, "errors": errors,
+                               "candidate": safe_candidate}).encode('utf-8')
+        return json.dumps({"valid": True,
+                           "candidate": safe_candidate}).encode('utf-8')
+
+    def OPTIONS(self, **params):
+        del cherrypy.response.headers['Allow']
+        cherrypy.response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
         cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         cherrypy.response.headers['Access-Control-Max-Age'] = 604800
